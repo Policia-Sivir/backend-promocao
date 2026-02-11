@@ -5,6 +5,7 @@ import { ErrorConfigurationProperties } from "@/types";
 import { ApiError } from "@/utils/ApiError";
 import { Logger } from "@/utils/Logger";
 import { ErrorRequestHandler, Request, Response, NextFunction } from "express";
+import { ZodError } from 'zod'
 
 export class ErrorHandlerMiddleware implements IMiddleware {
   readonly name: string
@@ -19,8 +20,13 @@ export class ErrorHandlerMiddleware implements IMiddleware {
 
   public getExpressHandler(): ErrorRequestHandler {
     return (error: Error, _req: Request, res: Response, _next: NextFunction) => {
-      let apiError: ApiError 
-      if (!(error instanceof ApiError)) {
+      let apiError: ApiError
+
+      if (error instanceof ZodError) {
+        this.logger.error('Validation error', error)
+        apiError = new ApiError( 400, ErrorCodes.ERROR_0005, error.issues.map(issue => issue.message).join('; '))
+      }
+      else if (!(error instanceof ApiError)) {
         this.logger.error(error.message, error)
         apiError = new ApiError(500, ErrorCodes.ERROR_0000, this.errorConfiguration.properties[ErrorCodes.ERROR_0000])
       } else {
@@ -30,7 +36,7 @@ export class ErrorHandlerMiddleware implements IMiddleware {
 
       res.status(apiError.statusCode).json({
         code: apiError.errorCode,
-        message: this.errorConfiguration.properties[apiError.errorCode]
+        message: apiError.message ?? this.errorConfiguration.properties[apiError.errorCode]
       })
     }
   }
